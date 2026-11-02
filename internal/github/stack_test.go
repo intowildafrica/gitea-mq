@@ -70,6 +70,20 @@ func TestForge_MergePR_Async(t *testing.T) {
 	}
 }
 
+func TestForge_MergePR_ClassicMethod(t *testing.T) {
+	t.Setenv("GITEA_MQ_GITHUB_MERGE_METHOD", "squash")
+	srv, f := newTestForge(t)
+	srv.AddPR("org", "app", ghfake.PR{Number: 5, HeadSHA: "sha5", BaseRef: "main"})
+	rp := srv.Repo("org", "app")
+
+	if err := f.MergePR(context.Background(), "org", "app", 5); err != nil {
+		t.Fatalf("MergePR: %v", err)
+	}
+	if len(rp.AsyncMerges) != 0 || len(rp.ClassicMerges) != 1 || rp.ClassicMerges[0] != "5:squash" {
+		t.Fatalf("async=%v classic=%v", rp.AsyncMerges, rp.ClassicMerges)
+	}
+}
+
 func TestForge_RemoveLabel(t *testing.T) {
 	srv, f := newTestForge(t)
 	srv.AddPR("org", "app", ghfake.PR{Number: 3, HeadSHA: "sha3", BaseRef: "main", Labels: []string{"merge-queue"}})

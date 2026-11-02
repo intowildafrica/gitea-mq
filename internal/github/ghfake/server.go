@@ -119,6 +119,8 @@ type Repo struct {
 	AsyncMergeStatus string
 	// AsyncMergeConflict makes merge-async return 409.
 	AsyncMergeConflict bool
+	// ClassicMerges records PUT /pulls/{n}/merge calls as "n:method".
+	ClassicMerges []string
 }
 
 type Stack struct {
@@ -290,6 +292,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST "+apiV3+"/repos/{o}/{r}/merges", s.hMerge)
 	mux.HandleFunc("GET "+apiV3+"/repos/{o}/{r}/stacks", s.hListStacks)
 	mux.HandleFunc("PUT "+apiV3+"/repos/{o}/{r}/pulls/{n}/merge-async", s.hMergeAsync)
+	mux.HandleFunc("PUT "+apiV3+"/repos/{o}/{r}/pulls/{n}/merge", s.hMergeClassic)
 	mux.HandleFunc("DELETE "+apiV3+"/repos/{o}/{r}/issues/{n}/labels/{l}", s.hRemoveLabel)
 	mux.HandleFunc("POST "+apiV3+"/repos/{o}/{r}/issues/{n}/labels", s.hAddLabels)
 	mux.HandleFunc("POST "+apiV3+"/repos/{o}/{r}/labels", s.hCreateLabel)
@@ -826,6 +829,21 @@ func (s *Server) hListStacks(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, 200, out)
+}
+
+func (s *Server) hMergeClassic(w http.ResponseWriter, r *http.Request) {
+	rp, ok := s.repoOr404(w, r)
+	if !ok {
+		return
+	}
+	var body struct {
+		MergeMethod string `json:"merge_method"`
+	}
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	rp.ClassicMerges = append(rp.ClassicMerges, r.PathValue("n")+":"+body.MergeMethod)
+	writeJSON(w, 200, map[string]any{"merged": true, "sha": "merged-" + r.PathValue("n")})
 }
 
 func (s *Server) hMergeAsync(w http.ResponseWriter, r *http.Request) {

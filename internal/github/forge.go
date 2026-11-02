@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"sync"
 
@@ -488,6 +489,13 @@ type asyncMergeResult struct {
 func (f *githubForge) MergePR(ctx context.Context, owner, name string, number int64) error {
 	c, err := f.app.ClientForRepo(owner, name)
 	if err != nil {
+		return err
+	}
+	// GITEA_MQ_GITHUB_MERGE_METHOD (merge|squash|rebase) uses the classic
+	// merge endpoint: merge-async stays "pending" on GitHub Free private repos.
+	// Not atomic for stacks, so leave it unset when merging stacked PRs.
+	if method := os.Getenv("GITEA_MQ_GITHUB_MERGE_METHOD"); method != "" {
+		_, _, err := c.PullRequests.Merge(ctx, owner, name, int(number), "", &gh.PullRequestOptions{MergeMethod: method})
 		return err
 	}
 	body := map[string]string{"merge_action": "default"}
