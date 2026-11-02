@@ -114,12 +114,14 @@ func (f *githubForge) GetRequiredChecks(ctx context.Context, owner, name, branch
 	if err != nil {
 		return nil, err
 	}
-	rules, _, err := c.Repositories.GetRulesForBranch(ctx, owner, name, branch, nil)
-	if err != nil {
+	// Private repos on GitHub Free answer 403 ("Upgrade to GitHub Pro") for
+	// rulesets and branch protection: no rules exist, so fall back to config.
+	rules, resp, err := c.Repositories.GetRulesForBranch(ctx, owner, name, branch, nil)
+	if err != nil && !planLacksRules(resp) {
 		return nil, err
 	}
 	var contexts []string
-	for _, r := range rules.RequiredStatusChecks {
+	for _, r := range rulesStatusChecks(rules) {
 		for _, sc := range r.Parameters.RequiredStatusChecks {
 			contexts = append(contexts, sc.Context)
 		}
@@ -128,7 +130,7 @@ func (f *githubForge) GetRequiredChecks(ctx context.Context, owner, name, branch
 	// Classic branch protection is separate from rulesets:
 	// 404 means the branch is unprotected.
 	rsc, resp, err := c.Repositories.GetRequiredStatusChecks(ctx, owner, name, branch)
-	if err != nil && (resp == nil || resp.StatusCode != http.StatusNotFound) {
+	if err != nil && (resp == nil || resp.StatusCode != http.StatusNotFound) && !planLacksRules(resp) {
 		return nil, fmt.Errorf("get branch protection checks for %s: %w", branch, err)
 	}
 	if err == nil && rsc.Contexts != nil {
@@ -524,4 +526,15 @@ func (f *githubForge) Comment(ctx context.Context, owner, name string, number in
 	}
 	_, _, err = c.Issues.CreateComment(ctx, owner, name, int(number), &gh.IssueComment{Body: gh.Ptr(body)})
 	return err
+}
+
+func planLacksRules(resp *gh.Response) bool {
+	return resp != nil && resp.StatusCode == http.StatusForbidden
+}
+
+func rulesStatusChecks(rules *gh.BranchRules) []*gh.RequiredStatusChecksBranchRule {
+	if rules == nil {
+		return nil
+	}
+	return rules.RequiredStatusChecks
 }

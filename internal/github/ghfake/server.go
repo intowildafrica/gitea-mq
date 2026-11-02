@@ -103,6 +103,10 @@ type Repo struct {
 	// stub rule evaluation directly.
 	RequiredChecks map[string][]string
 
+	// FreePlanPrivate makes rules and branch protection answer 403
+	// "Upgrade to GitHub Pro", as GitHub Free does for private repos.
+	FreePlanPrivate bool
+
 	// ProtectionChecks[branch] feeds classic branch protection; absent
 	// branches answer 404 like unprotected ones.
 	ProtectionChecks map[string][]string
@@ -972,6 +976,10 @@ func (s *Server) hProtectionChecks(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if rp.FreePlanPrivate {
+		writeJSON(w, 403, map[string]any{"message": "Upgrade to GitHub Pro or make this repository public to enable this feature."})
+		return
+	}
 	b := r.PathValue("b")
 	s.mu.Lock()
 	checks, protected := rp.ProtectionChecks[b]
@@ -986,6 +994,10 @@ func (s *Server) hProtectionChecks(w http.ResponseWriter, r *http.Request) {
 func (s *Server) hRulesForBranch(w http.ResponseWriter, r *http.Request) {
 	rp, ok := s.repoOr404(w, r)
 	if !ok {
+		return
+	}
+	if rp.FreePlanPrivate {
+		writeJSON(w, 403, map[string]any{"message": "Upgrade to GitHub Pro or make this repository public to enable this feature."})
 		return
 	}
 	b := r.PathValue("b")

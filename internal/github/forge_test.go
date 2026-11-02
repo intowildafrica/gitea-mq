@@ -122,6 +122,21 @@ func TestForge_GetRequiredChecks_MergesClassicProtection(t *testing.T) {
 	}
 }
 
+// GitHub Free answers 403 for rules on private repos; that means "no rules",
+// so the caller falls back to GITEA_MQ_REQUIRED_CHECKS.
+func TestForge_GetRequiredChecks_FreePlanPrivateRepoHasNone(t *testing.T) {
+	srv, f := newTestForge(t)
+	srv.Repo("org", "app").FreePlanPrivate = true
+
+	got, err := f.GetRequiredChecks(context.Background(), "org", "app", "main")
+	if err != nil {
+		t.Fatalf("GetRequiredChecks: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("got %v", got)
+	}
+}
+
 func TestForge_GetCheckStates_MapsRunsAndExcludesSelf(t *testing.T) {
 	srv, f := newTestForge(t)
 	repo := srv.Repo("org", "app")
